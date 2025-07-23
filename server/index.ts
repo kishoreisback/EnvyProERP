@@ -197,8 +197,11 @@ export function createServer() {
     },
   );
 
-  // Serve static files from the Vite build output
-  app.use(express.static("dist/spa"));
+  // In production, serve static files from the Vite build output
+  const isProduction = process.env.NODE_ENV === "production";
+  if (isProduction) {
+    app.use(express.static("dist/spa"));
+  }
 
   // Catch-all handler for client-side routing
   app.get("*", (req, res) => {
@@ -221,8 +224,18 @@ export function createServer() {
       return;
     }
 
-    // Serve the React app for all other routes (client-side routing)
-    res.sendFile("dist/spa/index.html", { root: process.cwd() });
+    // In development, let Vite handle client-side routing
+    // In production, serve the React app for all other routes
+    if (isProduction) {
+      res.sendFile("dist/spa/index.html", { root: process.cwd() });
+    } else {
+      // In development mode, don't handle client routes here - let Vite handle them
+      res.status(404).json({
+        error: "Not Found",
+        message: "Route not found in development mode",
+        timestamp: new Date().toISOString(),
+      });
+    }
   });
 
   return app;
