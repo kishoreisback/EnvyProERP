@@ -1,0 +1,111 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "BuildPro ERP - Multi-Tenant Overview",
+    "tags": ["buildpro", "multi-tenant", "overview"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"buildpro-app\"}",
+            "legendFormat": "Application Status"
+          },
+          {
+            "expr": "count(tenant_active_users)",
+            "legendFormat": "Active Tenants"
+          },
+          {
+            "expr": "sum(tenant_active_users)",
+            "legendFormat": "Total Active Users"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+      },
+      {
+        "id": 2,
+        "title": "Response Time by Tenant",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"buildpro-app\"}[5m])) by (le, tenant_id))",
+            "legendFormat": "95th percentile - {{tenant_id}}"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"buildpro-app\"}[5m])) by (le, tenant_id))",
+            "legendFormat": "50th percentile - {{tenant_id}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      },
+      {
+        "id": 3,
+        "title": "Tenant Usage Metrics",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "tenant_active_users",
+            "legendFormat": "{{tenant_id}}"
+          },
+          {
+            "expr": "tenant_storage_used_bytes / 1024 / 1024 / 1024",
+            "legendFormat": "Storage (GB) - {{tenant_id}}"
+          },
+          {
+            "expr": "rate(tenant_api_requests_total[5m]) * 60",
+            "legendFormat": "API Requests/min - {{tenant_id}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Error Rate by Tenant",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"buildpro-app\",status=~\"5..\"}[5m]) / rate(http_requests_total{job=\"buildpro-app\"}[5m])",
+            "legendFormat": "Error Rate - {{tenant_id}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+      },
+      {
+        "id": 5,
+        "title": "Database Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "postgresql_connections_active",
+            "legendFormat": "Active Connections"
+          },
+          {
+            "expr": "rate(postgresql_queries_total[5m])",
+            "legendFormat": "Queries/sec"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }
+      },
+      {
+        "id": 6,
+        "title": "Security Events",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{job=\"buildpro-app\", level=\"security\"}",
+            "legendFormat": "Security Events"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "10s"
+  }
+}

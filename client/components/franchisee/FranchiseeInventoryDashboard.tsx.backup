@@ -1,0 +1,2013 @@
+import React, { useState, useMemo } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../ui/card";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { Progress } from "../ui/progress";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { Separator } from "../ui/separator";
+import { AnimatedCounter } from "../ui/animated-counter";
+import {
+  Package,
+  Plus,
+  Search,
+  Filter,
+  RefreshCw,
+  Eye,
+  Edit,
+  Settings,
+  Upload,
+  Download,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Clock,
+  BarChart3,
+  Users,
+  ShoppingCart,
+  Database,
+  Zap,
+  Globe,
+  Tag,
+  TrendingUp,
+  TrendingDown,
+  MapPin,
+  Thermometer,
+  Truck,
+  Bell,
+  FileText,
+  Calendar,
+  Activity,
+  DollarSign,
+  Percent,
+  Target,
+  ArrowUpRight,
+  ArrowDownLeft,
+  RotateCcw,
+  Building,
+  Warehouse,
+} from "lucide-react";
+import {
+  mockInventoryItems,
+  mockInventoryLocations,
+  mockInventorySuppliers,
+  mockInventoryAlerts,
+  mockInventoryDashboard,
+  mockReorderConfigurations,
+  mockInventoryImports,
+  getInventoryItemById,
+  getInventoryItemsByLocation,
+  getInventoryItemsByCategory,
+  getLocationById,
+  getSupplierById,
+  getLowStockItems,
+  getExpiringItems,
+  getActiveAlerts,
+  getStockStatus,
+  formatCurrency,
+  formatPercentage,
+  simulateInventoryImport,
+  simulateStockUpdate,
+} from "./inventory-data";
+import {
+  FranchiseeInventoryItem,
+  InventoryLocation,
+  InventoryAlert,
+  CreateInventoryItemForm,
+  CreateLocationForm,
+  BulkInventoryUpdate,
+} from "./inventory-types";
+
+interface FranchiseeInventoryDashboardProps {
+  currentTab?: string;
+  onTabChange?: (tab: string) => void;
+}
+
+export function FranchiseeInventoryDashboard({
+  currentTab = "dashboard",
+  onTabChange,
+}: FranchiseeInventoryDashboardProps) {
+  const [activeTab, setActiveTab] = useState(currentTab);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedItem, setSelectedItem] =
+    useState<FranchiseeInventoryItem | null>(null);
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [showAddLocationModal, setShowAddLocationModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
+  const [addItemForm, setAddItemForm] = useState<
+    Partial<CreateInventoryItemForm>
+  >({});
+  const [addLocationForm, setAddLocationForm] = useState<
+    Partial<CreateLocationForm>
+  >({});
+  const [importProgress, setImportProgress] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showAlertSettingsModal, setShowAlertSettingsModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<InventoryAlert | null>(
+    null,
+  );
+  const [selectedReport, setSelectedReport] = useState<string>("");
+  const [bulkUpdateForm, setBulkUpdateForm] = useState<any>({});
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    onTabChange?.(newTab);
+  };
+
+  // Filtered inventory items
+  const filteredItems = useMemo(() => {
+    return mockInventoryItems.filter((item) => {
+      const matchesSearch =
+        item.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesLocation =
+        selectedLocation === "all" || item.locationId === selectedLocation;
+      const matchesCategory =
+        selectedCategory === "all" || item.category === selectedCategory;
+
+      return matchesSearch && matchesLocation && matchesCategory;
+    });
+  }, [searchQuery, selectedLocation, selectedCategory]);
+
+  const getStockStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      healthy: "bg-green-100 text-green-800",
+      low: "bg-yellow-100 text-yellow-800",
+      critical: "bg-red-100 text-red-800",
+      out_of_stock: "bg-gray-100 text-gray-800",
+    };
+    return colors[status] || "bg-gray-100 text-gray-800";
+  };
+
+  const getInventoryTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      owned: "bg-blue-100 text-blue-800",
+      consignment: "bg-purple-100 text-purple-800",
+      vendor_managed: "bg-orange-100 text-orange-800",
+    };
+    return colors[type] || "bg-gray-100 text-gray-800";
+  };
+
+  const getAlertSeverityColor = (severity: string) => {
+    const colors: Record<string, string> = {
+      info: "bg-blue-100 text-blue-800",
+      warning: "bg-yellow-100 text-yellow-800",
+      critical: "bg-red-100 text-red-800",
+      urgent: "bg-red-200 text-red-900",
+    };
+    return colors[severity] || "bg-gray-100 text-gray-800";
+  };
+
+  const handleItemAction = (action: string, item: FranchiseeInventoryItem) => {
+    setSelectedItem(item);
+    switch (action) {
+      case "view":
+        setShowItemModal(true);
+        break;
+      case "edit":
+        setAddItemForm({
+          productId: item.productId,
+          locationId: item.locationId,
+          inventoryType: item.inventoryType,
+          currentStock: item.currentStock,
+          minimumStock: item.minimumStock,
+          maximumStock: item.maximumStock,
+          reorderPoint: item.reorderPoint,
+          reorderQuantity: item.reorderQuantity,
+          unitCost: item.unitCost,
+        });
+        setShowAddItemModal(true);
+        break;
+      case "reorder":
+        handleReorder(item);
+        break;
+      case "adjust":
+        handleStockAdjustment(item);
+        break;
+    }
+  };
+
+  const handleReorder = async (item: FranchiseeInventoryItem) => {
+    const confirmed = confirm(
+      `Place reorder for ${item.productName}?\nQuantity: ${item.reorderQuantity} units`,
+    );
+    if (confirmed) {
+      // Simulate reorder process
+      alert(
+        `Reorder placed successfully for ${item.productName}\nQuantity: ${item.reorderQuantity} units\nSupplier: ${item.supplier.name}`,
+      );
+    }
+  };
+
+  const handleStockAdjustment = async (item: FranchiseeInventoryItem) => {
+    const newQuantity = prompt(
+      `Enter new stock quantity for ${item.productName}:`,
+      item.currentStock.toString(),
+    );
+    if (newQuantity && !isNaN(parseInt(newQuantity))) {
+      const quantity = parseInt(newQuantity);
+      const reason = prompt(
+        "Reason for adjustment:",
+        "Manual stock adjustment",
+      );
+
+      if (reason) {
+        try {
+          const result = await simulateStockUpdate(item.id, quantity, reason);
+          if (result.success) {
+            alert("Stock updated successfully!");
+            // In real app, refresh the data
+          } else {
+            alert("Failed to update stock. Please try again.");
+          }
+        } catch (error) {
+          alert("Error updating stock. Please try again.");
+        }
+      }
+    }
+  };
+
+  const handleInventoryImport = async () => {
+    setIsImporting(true);
+    setImportProgress(0);
+
+    // Simulate import progress
+    const interval = setInterval(() => {
+      setImportProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsImporting(false);
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 200);
+
+    try {
+      const result = await simulateInventoryImport("corporate_catalog", 156);
+      if (result.success) {
+        alert(
+          `Import completed successfully!\nTotal: ${result.summary.totalItems}\nSuccess: ${result.summary.successfulItems}\nFailed: ${result.summary.failedItems}`,
+        );
+        setShowImportModal(false);
+      }
+    } catch (error) {
+      alert("Import failed. Please try again.");
+    } finally {
+      clearInterval(interval);
+      setIsImporting(false);
+      setImportProgress(0);
+    }
+  };
+
+  const getLocationIcon = (type: string) => {
+    switch (type) {
+      case "store":
+        return <ShoppingCart className="h-4 w-4" />;
+      case "warehouse":
+        return <Warehouse className="h-4 w-4" />;
+      case "distribution_center":
+        return <Truck className="h-4 w-4" />;
+      case "display_area":
+        return <Eye className="h-4 w-4" />;
+      case "storage_room":
+        return <Package className="h-4 w-4" />;
+      default:
+        return <Building className="h-4 w-4" />;
+    }
+  };
+
+  return (
+    <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            <Package className="h-8 w-8 text-blue-600" />
+            Franchisee Inventory Management
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Manage your inventory across all locations with real-time tracking
+            and automated alerts
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowImportModal(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import Stock
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowBulkUpdateModal(true)}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Bulk Update
+          </Button>
+          <Button onClick={() => setShowAddItemModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Item
+          </Button>
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+            <Package className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <AnimatedCounter value={mockInventoryDashboard.totalItems} />
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <BarChart3 className="h-3 w-3 text-blue-600" />
+              <span className="text-blue-600">
+                Across {mockInventoryDashboard.totalLocations} locations
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatCurrency(mockInventoryDashboard.totalValue)}
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <TrendingUp className="h-3 w-3 text-green-600" />
+              <span className="text-green-600">
+                Turnover: {mockInventoryDashboard.averageTurnover}x
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <AnimatedCounter value={mockInventoryDashboard.lowStockItems} />
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Target className="h-3 w-3 text-yellow-600" />
+              <span className="text-yellow-600">Need reorder</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
+            <Calendar className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <AnimatedCounter value={mockInventoryDashboard.expiringSoon} />
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3 text-orange-600" />
+              <span className="text-orange-600">Within 30 days</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Stock Outs</CardTitle>
+            <XCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <AnimatedCounter value={mockInventoryDashboard.stockoutItems} />
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <ArrowDownLeft className="h-3 w-3 text-red-600" />
+              <span className="text-red-600">Immediate action</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Alerts</CardTitle>
+            <Bell className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <AnimatedCounter value={mockInventoryDashboard.activeAlerts} />
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Activity className="h-3 w-3 text-purple-600" />
+              <span className="text-purple-600">
+                {mockInventoryDashboard.alertsSummary.critical} critical
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content Tabs */}
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="space-y-6"
+      >
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="inventory">Inventory</TabsTrigger>
+          <TabsTrigger value="locations">Locations</TabsTrigger>
+          <TabsTrigger value="alerts">Alerts</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+
+        {/* Dashboard Tab */}
+        <TabsContent value="dashboard" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Recent Movements */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Movements</CardTitle>
+                <CardDescription>Latest inventory transactions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {mockInventoryDashboard.recentMovements.map((movement) => (
+                    <div
+                      key={movement.id}
+                      className="flex items-center gap-4 p-3 border rounded-lg"
+                    >
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100">
+                        {movement.type === "inbound" && (
+                          <ArrowUpRight className="h-4 w-4 text-green-600" />
+                        )}
+                        {movement.type === "outbound" && (
+                          <ArrowDownLeft className="h-4 w-4 text-red-600" />
+                        )}
+                        {movement.type === "transfer" && (
+                          <RotateCcw className="h-4 w-4 text-blue-600" />
+                        )}
+                        {movement.type === "adjustment" && (
+                          <Settings className="h-4 w-4 text-orange-600" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">
+                          {movement.type.charAt(0).toUpperCase() +
+                            movement.type.slice(1)}{" "}
+                          - {movement.reason}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>Qty: {Math.abs(movement.quantity)}</span>
+                          <span>•</span>
+                          <span>{movement.performedBy}</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(movement.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline">
+                          {movement.reference.documentNumber}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Top Categories */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Inventory by Category</CardTitle>
+                <CardDescription>
+                  Value and performance by category
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {mockInventoryDashboard.topCategories.map((category) => (
+                    <div key={category.categoryId} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">
+                          {category.categoryName}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {category.totalItems} items
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Progress
+                          value={
+                            (category.totalValue /
+                              mockInventoryDashboard.totalValue) *
+                            100
+                          }
+                          className="flex-1 h-2"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {formatPercentage(
+                            (category.totalValue /
+                              mockInventoryDashboard.totalValue) *
+                              100,
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>
+                          Value: {formatCurrency(category.totalValue)}
+                        </span>
+                        <span>Turnover: {category.averageTurnover}x</span>
+                        <span>Low Stock: {category.lowStockCount}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Performance Metrics */}
+          <div className="grid gap-6 md:grid-cols-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Stock Accuracy</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">
+                  {formatPercentage(
+                    mockInventoryDashboard.performanceMetrics.stockAccuracy,
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Last count:{" "}
+                  {new Date(
+                    mockInventoryDashboard.performanceMetrics.lastCycleCount,
+                  ).toLocaleDateString()}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Turnover Rate</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-600">
+                  {mockInventoryDashboard.performanceMetrics.turnoverRate}x
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Inventory days:{" "}
+                  {mockInventoryDashboard.performanceMetrics.inventoryDays}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Stockout Rate</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-red-600">
+                  {formatPercentage(
+                    mockInventoryDashboard.performanceMetrics.stockoutRate,
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Order fulfillment:{" "}
+                  {formatPercentage(
+                    mockInventoryDashboard.performanceMetrics.orderFulfillment,
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Carrying Cost</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-orange-600">
+                  {formatPercentage(
+                    mockInventoryDashboard.performanceMetrics.carryingCost,
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Supplier performance:{" "}
+                  {formatPercentage(
+                    mockInventoryDashboard.performanceMetrics
+                      .supplierPerformance,
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Inventory Tab */}
+        <TabsContent value="inventory" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold">Inventory Items</h2>
+              <p className="text-muted-foreground">
+                Manage stock levels and track product availability
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-80"
+                />
+              </div>
+              <Select
+                value={selectedLocation}
+                onValueChange={setSelectedLocation}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="All Locations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Locations</SelectItem>
+                  {mockInventoryLocations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={selectedCategory}
+                onValueChange={setSelectedCategory}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {Array.from(
+                    new Set(mockInventoryItems.map((item) => item.category)),
+                  ).map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline">
+                <Filter className="h-4 w-4 mr-2" />
+                Filter
+              </Button>
+            </div>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Current Stock</TableHead>
+                    <TableHead>Min/Max</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[120px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredItems.map((item) => {
+                    const stockStatus = getStockStatus(item);
+                    const location = getLocationById(item.locationId);
+
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{item.productName}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {item.sku}
+                            </p>
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {item.category}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getLocationIcon(location?.type || "store")}
+                            <span className="text-sm">{location?.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={getInventoryTypeColor(
+                              item.inventoryType,
+                            )}
+                          >
+                            {item.inventoryType.replace("_", " ")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <span className="font-medium">
+                              {item.currentStock}
+                            </span>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                              <div
+                                className={`h-1.5 rounded-full ${
+                                  stockStatus === "healthy"
+                                    ? "bg-green-500"
+                                    : stockStatus === "low"
+                                      ? "bg-yellow-500"
+                                      : stockStatus === "critical"
+                                        ? "bg-red-500"
+                                        : "bg-gray-500"
+                                }`}
+                                style={{
+                                  width: `${Math.min((item.currentStock / item.maximumStock) * 100, 100)}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div>Min: {item.minimumStock}</div>
+                            <div>Max: {item.maximumStock}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">
+                            {formatCurrency(item.totalValue)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getStockStatusColor(stockStatus)}>
+                            {stockStatus.replace("_", " ")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleItemAction("view", item)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleItemAction("edit", item)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            {item.currentStock <= item.reorderPoint && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleItemAction("reorder", item)
+                                }
+                                className="text-orange-600"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Locations Tab */}
+        <TabsContent value="locations" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold">Inventory Locations</h2>
+              <p className="text-muted-foreground">
+                Manage your storage and retail locations
+              </p>
+            </div>
+            <Button onClick={() => setShowAddLocationModal(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Location
+            </Button>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {mockInventoryLocations.map((location) => {
+              const locationItems = getInventoryItemsByLocation(location.id);
+              const locationValue = locationItems.reduce(
+                (sum, item) => sum + item.totalValue,
+                0,
+              );
+
+              return (
+                <Card key={location.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      {getLocationIcon(location.type)}
+                      {location.name}
+                    </CardTitle>
+                    <CardDescription>
+                      {location.address.street}, {location.address.city}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <div>
+                          <Label className="text-xs">ITEMS</Label>
+                          <p className="font-medium">{locationItems.length}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs">VALUE</Label>
+                          <p className="font-medium">
+                            {formatCurrency(locationValue)}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-xs">CAPACITY</Label>
+                          <p className="font-medium">
+                            {location.capacity.totalArea}{" "}
+                            {location.capacity.unit}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-xs">MANAGER</Label>
+                          <p className="font-medium">{location.manager.name}</p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">ZONES</Label>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {location.zones.map((zone) => (
+                            <Badge
+                              key={zone.id}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {zone.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">FACILITIES</Label>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {location.facilities.map((facility) => (
+                            <Badge
+                              key={facility.id}
+                              variant="secondary"
+                              className="text-xs"
+                            >
+                              {facility.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => {
+                            setSelectedItem(null);
+                            alert(
+                              `Viewing location: ${location.name}\nType: ${location.type}\nAddress: ${location.address.street}, ${location.address.city}`,
+                            );
+                          }}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => {
+                            setAddLocationForm({
+                              name: location.name,
+                              type: location.type as any,
+                              address: location.address,
+                              capacity: location.capacity,
+                            });
+                            setShowAddLocationModal(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </TabsContent>
+
+        {/* Alerts Tab */}
+        <TabsContent value="alerts" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold">Inventory Alerts</h2>
+              <p className="text-muted-foreground">
+                Monitor critical inventory conditions
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  alert("Refreshing alerts...");
+                  // In real app, this would refresh the alerts data
+                }}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowAlertSettingsModal(true)}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Alert Settings
+              </Button>
+            </div>
+          </div>
+
+          {/* Alert Summary */}
+          <div className="grid gap-4 md:grid-cols-5">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm font-medium">Total Alerts</span>
+                </div>
+                <div className="text-2xl font-bold mt-2">
+                  {mockInventoryDashboard.alertsSummary.total}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <span className="text-sm font-medium">Critical</span>
+                </div>
+                <div className="text-2xl font-bold mt-2 text-red-600">
+                  {mockInventoryDashboard.alertsSummary.critical}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm font-medium">Warning</span>
+                </div>
+                <div className="text-2xl font-bold mt-2 text-yellow-600">
+                  {mockInventoryDashboard.alertsSummary.warning}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-orange-600" />
+                  <span className="text-sm font-medium">Low Stock</span>
+                </div>
+                <div className="text-2xl font-bold mt-2 text-orange-600">
+                  {mockInventoryDashboard.alertsSummary.byType.lowStock}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium">Expiring</span>
+                </div>
+                <div className="text-2xl font-bold mt-2 text-blue-600">
+                  {mockInventoryDashboard.alertsSummary.byType.expiry}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Active Alerts */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Alerts</CardTitle>
+              <CardDescription>
+                Alerts requiring immediate attention
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {getActiveAlerts().map((alertItem) => (
+                  <div
+                    key={alertItem.id}
+                    className="flex items-start gap-4 p-4 border rounded-lg"
+                  >
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100">
+                      {alertItem.type === "low_stock" && (
+                        <Target className="h-4 w-4 text-red-600" />
+                      )}
+                      {alertItem.type === "expiry_warning" && (
+                        <Calendar className="h-4 w-4 text-orange-600" />
+                      )}
+                      {alertItem.type === "temperature_breach" && (
+                        <Thermometer className="h-4 w-4 text-red-600" />
+                      )}
+                      {alertItem.type === "reorder_due" && (
+                        <RefreshCw className="h-4 w-4 text-blue-600" />
+                      )}
+                      {alertItem.type === "stock_out" && (
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{alertItem.message}</span>
+                        <Badge
+                          className={getAlertSeverityColor(alertItem.severity)}
+                        >
+                          {alertItem.severity}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {alertItem.details}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>
+                          {new Date(alertItem.triggeredAt).toLocaleString()}
+                        </span>
+                        {alertItem.acknowledgedAt && (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Acknowledged by {alertItem.acknowledgedBy}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {!alertItem.acknowledgedAt && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            alertItem.acknowledgedAt = new Date().toISOString();
+                            alertItem.acknowledgedBy = "current_user";
+                            alert(`Alert acknowledged: ${alertItem.message}`);
+                          }}
+                        >
+                          Acknowledge
+                        </Button>
+                      )}
+                      {alertItem.actionRequired && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setSelectedAlert(alertItem);
+                            if (
+                              alertItem.type === "low_stock" ||
+                              alertItem.type === "reorder_due"
+                            ) {
+                              alert("Initiating reorder process...");
+                            } else if (alertItem.type === "expiry_warning") {
+                              alert("Opening expiry management workflow...");
+                            } else if (
+                              alertItem.type === "temperature_breach"
+                            ) {
+                              alert("Checking temperature control systems...");
+                            } else {
+                              alert(`Taking action for: ${alertItem.message}`);
+                            }
+                          }}
+                        >
+                          Take Action
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Reports Tab */}
+        <TabsContent value="reports" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold">Inventory Reports</h2>
+              <p className="text-muted-foreground">
+                Generate and schedule inventory reports
+              </p>
+            </div>
+            <Button onClick={() => setShowReportModal(true)}>
+              <FileText className="h-4 w-4 mr-2" />
+              Generate Report
+            </Button>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                name: "Stock Valuation Report",
+                description: "Current stock value by location and category",
+                icon: DollarSign,
+              },
+              {
+                name: "Movement Summary",
+                description: "Inventory movements for selected period",
+                icon: Activity,
+              },
+              {
+                name: "ABC Analysis",
+                description: "Product classification by value and volume",
+                icon: BarChart3,
+              },
+              {
+                name: "Aging Report",
+                description: "Slow-moving and dead stock analysis",
+                icon: Clock,
+              },
+              {
+                name: "Turnover Analysis",
+                description: "Inventory turnover rates and trends",
+                icon: TrendingUp,
+              },
+              {
+                name: "Reorder Report",
+                description: "Items requiring reorder and recommendations",
+                icon: RefreshCw,
+              },
+            ].map((report, index) => (
+              <Card key={index}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <report.icon className="h-5 w-5" />
+                    {report.name}
+                  </CardTitle>
+                  <CardDescription>{report.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setSelectedReport(report.name);
+                        alert(`Previewing ${report.name}...`);
+                      }}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Preview
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setSelectedReport(report.name);
+                        alert(
+                          `Generating ${report.name}...\nReport will be available for download shortly.`,
+                        );
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Generate
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Import History */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Import History</CardTitle>
+              <CardDescription>
+                Recent inventory import activities
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Imported By</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Success Rate</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mockInventoryImports.map((importRecord) => (
+                    <TableRow key={importRecord.id}>
+                      <TableCell>
+                        <span className="capitalize">
+                          {importRecord.sourceType.replace("_", " ")}
+                        </span>
+                      </TableCell>
+                      <TableCell>{importRecord.importedBy}</TableCell>
+                      <TableCell>
+                        {new Date(importRecord.importedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            importRecord.status === "completed"
+                              ? "bg-green-100 text-green-800"
+                              : importRecord.status === "partially_completed"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : importRecord.status === "failed"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-gray-100 text-gray-800"
+                          }
+                        >
+                          {importRecord.status.replace("_", " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{importRecord.totalItems}</TableCell>
+                      <TableCell>
+                        {Math.round(
+                          (importRecord.successfulItems /
+                            importRecord.totalItems) *
+                            100,
+                        )}
+                        %
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            alert(
+                              `Viewing import details:\nID: ${importRecord.id}\nSource: ${importRecord.sourceType}\nStatus: ${importRecord.status}\nSuccess Rate: ${Math.round((importRecord.successfulItems / importRecord.totalItems) * 100)}%`,
+                            );
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Settings Tab */}
+        <TabsContent value="settings" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Reorder Settings</CardTitle>
+                <CardDescription>
+                  Configure automatic reorder rules
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Default Reorder Method</Label>
+                    <Select defaultValue="hybrid">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual</SelectItem>
+                        <SelectItem value="automatic">Automatic</SelectItem>
+                        <SelectItem value="hybrid">Hybrid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Safety Stock Percentage</Label>
+                    <Input type="number" defaultValue="20" placeholder="20%" />
+                  </div>
+                  <div>
+                    <Label>Review Cycle (days)</Label>
+                    <Input type="number" defaultValue="14" placeholder="14" />
+                  </div>
+                  <Button
+                    onClick={() =>
+                      alert("Reorder settings saved successfully!")
+                    }
+                  >
+                    Save Settings
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Alert Settings</CardTitle>
+                <CardDescription>
+                  Configure inventory alert thresholds
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Low Stock Alert (%)</Label>
+                    <Input type="number" defaultValue="30" placeholder="30%" />
+                  </div>
+                  <div>
+                    <Label>Expiry Warning (days)</Label>
+                    <Input type="number" defaultValue="30" placeholder="30" />
+                  </div>
+                  <div>
+                    <Label>Temperature Alert</Label>
+                    <Select defaultValue="immediate">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="immediate">Immediate</SelectItem>
+                        <SelectItem value="5min">5 minutes</SelectItem>
+                        <SelectItem value="15min">15 minutes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    onClick={() => alert("Alert settings saved successfully!")}
+                  >
+                    Save Settings
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Inventory Import Modal */}
+      <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Import Inventory</DialogTitle>
+            <DialogDescription>
+              Import inventory data from various sources
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Import Source</Label>
+              <Select defaultValue="corporate_catalog">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="corporate_catalog">
+                    Corporate Catalog
+                  </SelectItem>
+                  <SelectItem value="manual_entry">
+                    Manual Entry (Excel/CSV)
+                  </SelectItem>
+                  <SelectItem value="supplier_feed">Supplier Feed</SelectItem>
+                  <SelectItem value="existing_system">
+                    Existing System
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Target Location</Label>
+              <Select defaultValue="all">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Locations</SelectItem>
+                  {mockInventoryLocations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isImporting && (
+              <div>
+                <Label>Import Progress</Label>
+                <div className="mt-2">
+                  <Progress value={importProgress} className="h-2" />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {importProgress}% completed
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowImportModal(false)}
+                disabled={isImporting}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleInventoryImport} disabled={isImporting}>
+                {isImporting ? "Importing..." : "Start Import"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Item Modal */}
+      <Dialog open={showAddItemModal} onOpenChange={setShowAddItemModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Inventory Item</DialogTitle>
+            <DialogDescription>
+              Add a new product to your inventory
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>Product *</Label>
+                <Select
+                  value={addItemForm.productId || ""}
+                  onValueChange={(value) =>
+                    setAddItemForm({ ...addItemForm, productId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select product" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="prod_cola_500ml">
+                      Premium Cola 500ml
+                    </SelectItem>
+                    <SelectItem value="prod_energy_250ml">
+                      Power Energy Drink 250ml
+                    </SelectItem>
+                    <SelectItem value="prod_tshirt_brand">
+                      Branded T-Shirt
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Location *</Label>
+                <Select
+                  value={addItemForm.locationId || ""}
+                  onValueChange={(value) =>
+                    setAddItemForm({ ...addItemForm, locationId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mockInventoryLocations.map((location) => (
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Inventory Type *</Label>
+                <Select
+                  value={addItemForm.inventoryType || ""}
+                  onValueChange={(value: any) =>
+                    setAddItemForm({ ...addItemForm, inventoryType: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="owned">Owned</SelectItem>
+                    <SelectItem value="consignment">Consignment</SelectItem>
+                    <SelectItem value="vendor_managed">
+                      Vendor Managed
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Current Stock *</Label>
+                <Input
+                  type="number"
+                  value={addItemForm.currentStock || ""}
+                  onChange={(e) =>
+                    setAddItemForm({
+                      ...addItemForm,
+                      currentStock: parseInt(e.target.value),
+                    })
+                  }
+                  placeholder="Current stock quantity"
+                />
+              </div>
+              <div>
+                <Label>Minimum Stock *</Label>
+                <Input
+                  type="number"
+                  value={addItemForm.minimumStock || ""}
+                  onChange={(e) =>
+                    setAddItemForm({
+                      ...addItemForm,
+                      minimumStock: parseInt(e.target.value),
+                    })
+                  }
+                  placeholder="Minimum stock level"
+                />
+              </div>
+              <div>
+                <Label>Maximum Stock *</Label>
+                <Input
+                  type="number"
+                  value={addItemForm.maximumStock || ""}
+                  onChange={(e) =>
+                    setAddItemForm({
+                      ...addItemForm,
+                      maximumStock: parseInt(e.target.value),
+                    })
+                  }
+                  placeholder="Maximum stock level"
+                />
+              </div>
+              <div>
+                <Label>Reorder Point *</Label>
+                <Input
+                  type="number"
+                  value={addItemForm.reorderPoint || ""}
+                  onChange={(e) =>
+                    setAddItemForm({
+                      ...addItemForm,
+                      reorderPoint: parseInt(e.target.value),
+                    })
+                  }
+                  placeholder="Reorder point"
+                />
+              </div>
+              <div>
+                <Label>Reorder Quantity *</Label>
+                <Input
+                  type="number"
+                  value={addItemForm.reorderQuantity || ""}
+                  onChange={(e) =>
+                    setAddItemForm({
+                      ...addItemForm,
+                      reorderQuantity: parseInt(e.target.value),
+                    })
+                  }
+                  placeholder="Reorder quantity"
+                />
+              </div>
+              <div>
+                <Label>Unit Cost *</Label>
+                <Input
+                  type="number"
+                  value={addItemForm.unitCost || ""}
+                  onChange={(e) =>
+                    setAddItemForm({
+                      ...addItemForm,
+                      unitCost: parseFloat(e.target.value),
+                    })
+                  }
+                  placeholder="Unit cost"
+                />
+              </div>
+              <div>
+                <Label>Supplier</Label>
+                <Select
+                  value={addItemForm.supplierId || ""}
+                  onValueChange={(value) =>
+                    setAddItemForm({ ...addItemForm, supplierId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select supplier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mockInventorySuppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>Expiry Date</Label>
+                <Input
+                  type="date"
+                  value={addItemForm.expiryDate || ""}
+                  onChange={(e) =>
+                    setAddItemForm({
+                      ...addItemForm,
+                      expiryDate: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Batch Number</Label>
+                <Input
+                  value={addItemForm.batchNumber || ""}
+                  onChange={(e) =>
+                    setAddItemForm({
+                      ...addItemForm,
+                      batchNumber: e.target.value,
+                    })
+                  }
+                  placeholder="Batch number"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Notes</Label>
+              <Textarea
+                value={addItemForm.notes || ""}
+                onChange={(e) =>
+                  setAddItemForm({ ...addItemForm, notes: e.target.value })
+                }
+                placeholder="Additional notes"
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowAddItemModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  console.log("Adding inventory item:", addItemForm);
+                  alert("Inventory item added successfully!");
+                  setShowAddItemModal(false);
+                  setAddItemForm({});
+                }}
+                disabled={
+                  !addItemForm.productId ||
+                  !addItemForm.locationId ||
+                  !addItemForm.currentStock
+                }
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Location Modal */}
+      <Dialog
+        open={showAddLocationModal}
+        onOpenChange={setShowAddLocationModal}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Location</DialogTitle>
+            <DialogDescription>Add a new inventory location</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>Location Name *</Label>
+                <Input
+                  value={addLocationForm.name || ""}
+                  onChange={(e) =>
+                    setAddLocationForm({
+                      ...addLocationForm,
+                      name: e.target.value,
+                    })
+                  }
+                  placeholder="Location name"
+                />
+              </div>
+              <div>
+                <Label>Location Type *</Label>
+                <Select
+                  value={addLocationForm.type || ""}
+                  onValueChange={(value: any) =>
+                    setAddLocationForm({ ...addLocationForm, type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="store">Store</SelectItem>
+                    <SelectItem value="warehouse">Warehouse</SelectItem>
+                    <SelectItem value="distribution_center">
+                      Distribution Center
+                    </SelectItem>
+                    <SelectItem value="display_area">Display Area</SelectItem>
+                    <SelectItem value="storage_room">Storage Room</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label>Address</Label>
+              <div className="grid gap-4 md:grid-cols-2 mt-2">
+                <Input placeholder="Street address" />
+                <Input placeholder="City" />
+                <Input placeholder="State" />
+                <Input placeholder="Pincode" />
+              </div>
+            </div>
+
+            <div>
+              <Label>Capacity</Label>
+              <div className="grid gap-4 md:grid-cols-3 mt-2">
+                <Input type="number" placeholder="Total area" />
+                <Input type="number" placeholder="Storage area" />
+                <Select defaultValue="sqft">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sqft">Sq Ft</SelectItem>
+                    <SelectItem value="sqm">Sq M</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowAddLocationModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  console.log("Adding location:", addLocationForm);
+                  alert("Location added successfully!");
+                  setShowAddLocationModal(false);
+                  setAddLocationForm({});
+                }}
+                disabled={!addLocationForm.name || !addLocationForm.type}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Location
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Alert Settings Modal */}
+      <Dialog
+        open={showAlertSettingsModal}
+        onOpenChange={setShowAlertSettingsModal}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Alert Settings</DialogTitle>
+            <DialogDescription>
+              Configure inventory alert preferences
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>Low Stock Alert (%)</Label>
+                <Input type="number" defaultValue="30" placeholder="30%" />
+              </div>
+              <div>
+                <Label>Critical Stock Alert (%)</Label>
+                <Input type="number" defaultValue="10" placeholder="10%" />
+              </div>
+              <div>
+                <Label>Expiry Warning (days)</Label>
+                <Input type="number" defaultValue="30" placeholder="30" />
+              </div>
+              <div>
+                <Label>Expiry Critical (days)</Label>
+                <Input type="number" defaultValue="7" placeholder="7" />
+              </div>
+            </div>
+
+            <div>
+              <Label>Alert Methods</Label>
+              <div className="grid gap-2 mt-2">
+                {["Email", "SMS", "In-App Notification", "Dashboard Alert"].map(
+                  (method) => (
+                    <div key={method} className="flex items-center space-x-2">
+                      <input type="checkbox" id={method} defaultChecked />
+                      <Label htmlFor={method} className="text-sm">
+                        {method}
+                      </Label>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowAlertSettingsModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  alert("Alert settings saved successfully!");
+                  setShowAlertSettingsModal(false);
+                }}
+              >
+                Save Settings
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Generate Report Modal */}
+      <Dialog open={showReportModal} onOpenChange={setShowReportModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Generate Report</DialogTitle>
+            <DialogDescription>
+              Configure and generate inventory reports
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Report Type *</Label>
+              <Select value={selectedReport} onValueChange={setSelectedReport}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select report type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stock_valuation">
+                    Stock Valuation Report
+                  </SelectItem>
+                  <SelectItem value="movement_summary">
+                    Movement Summary
+                  </SelectItem>
+                  <SelectItem value="abc_analysis">ABC Analysis</SelectItem>
+                  <SelectItem value="aging_report">Aging Report</SelectItem>
+                  <SelectItem value="turnover_analysis">
+                    Turnover Analysis
+                  </SelectItem>
+                  <SelectItem value="reorder_report">Reorder Report</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>From Date</Label>
+                <Input type="date" />
+              </div>
+              <div>
+                <Label>To Date</Label>
+                <Input type="date" />
+              </div>
+            </div>
+
+            <div>
+              <Label>Locations</Label>
+              <Select defaultValue="all">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Locations</SelectItem>
+                  {mockInventoryLocations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Format</Label>
+              <Select defaultValue="pdf">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pdf">PDF</SelectItem>
+                  <SelectItem value="excel">Excel</SelectItem>
+                  <SelectItem value="csv">CSV</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowReportModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  alert(
+                    `Generating ${selectedReport || "report"}...\nReport will be available for download shortly.`,
+                  );
+                  setShowReportModal(false);
+                  setSelectedReport("");
+                }}
+                disabled={!selectedReport}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Generate Report
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

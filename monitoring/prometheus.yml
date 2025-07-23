@@ -1,0 +1,74 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # BuildPro ERP Application
+  - job_name: "buildpro-app"
+    static_configs:
+      - targets: ["app:3000"]
+    metrics_path: "/metrics"
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+  # PostgreSQL Database
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres:5432"]
+    metrics_path: "/metrics"
+
+  # Redis Cache
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+
+  # NGINX Load Balancer
+  - job_name: "nginx"
+    static_configs:
+      - targets: ["nginx:80"]
+    metrics_path: "/nginx_status"
+
+  # Node Exporter (System Metrics)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # Custom Business Metrics
+  - job_name: "buildpro-business-metrics"
+    static_configs:
+      - targets: ["app:3000"]
+    metrics_path: "/api/metrics/business"
+    scrape_interval: 30s
+
+  # Multi-Tenant Metrics
+  - job_name: "tenant-metrics"
+    static_configs:
+      - targets: ["app:3000"]
+    metrics_path: "/api/metrics/tenants"
+    scrape_interval: 60s
+    relabel_configs:
+      - source_labels: [__param_tenant_id]
+        target_label: tenant_id
+
+  # Security Metrics
+  - job_name: "security-metrics"
+    static_configs:
+      - targets: ["app:3000"]
+    metrics_path: "/api/metrics/security"
+    scrape_interval: 30s
+
+  # Performance Metrics
+  - job_name: "performance-metrics"
+    static_configs:
+      - targets: ["app:3000"]
+    metrics_path: "/api/metrics/performance"
+    scrape_interval: 15s
