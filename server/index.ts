@@ -197,33 +197,38 @@ export function createServer() {
     },
   );
 
-  // Serve static files from the Vite build output
-  app.use(express.static("dist/spa"));
+  // In production, serve static files from the Vite build output
+  const isProduction = process.env.NODE_ENV === "production";
+  if (isProduction) {
+    app.use(express.static("dist/spa"));
+  }
 
-  // Catch-all handler for client-side routing
-  app.get("*", (req, res) => {
-    // Skip API routes
-    if (
-      req.path.startsWith("/api/") ||
-      req.path.startsWith("/health") ||
-      req.path.startsWith("/metrics")
-    ) {
-      logger.warn("NOT_FOUND", `Route not found: ${req.method} ${req.url}`, {
-        ip: req.ip,
-        userAgent: req.get("User-Agent"),
-      });
+  // Catch-all handler for client-side routing (only in production)
+  if (isProduction) {
+    app.get("*", (req, res) => {
+      // Skip API routes
+      if (
+        req.path.startsWith("/api/") ||
+        req.path.startsWith("/health") ||
+        req.path.startsWith("/metrics")
+      ) {
+        logger.warn("NOT_FOUND", `Route not found: ${req.method} ${req.url}`, {
+          ip: req.ip,
+          userAgent: req.get("User-Agent"),
+        });
 
-      res.status(404).json({
-        error: "Not Found",
-        message: `Route ${req.method} ${req.url} not found`,
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
+        res.status(404).json({
+          error: "Not Found",
+          message: `Route ${req.method} ${req.url} not found`,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
 
-    // Serve the React app for all other routes (client-side routing)
-    res.sendFile("dist/spa/index.html", { root: process.cwd() });
-  });
+      // Serve the React app for all other routes
+      res.sendFile("dist/spa/index.html", { root: process.cwd() });
+    });
+  }
 
   return app;
 }
