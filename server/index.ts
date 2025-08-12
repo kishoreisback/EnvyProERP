@@ -203,40 +203,32 @@ export function createServer() {
     app.use(express.static("dist/spa"));
   }
 
-  // Catch-all handler for client-side routing
-  app.get("*", (req, res) => {
-    // Skip API routes
-    if (
-      req.path.startsWith("/api/") ||
-      req.path.startsWith("/health") ||
-      req.path.startsWith("/metrics")
-    ) {
-      logger.warn("NOT_FOUND", `Route not found: ${req.method} ${req.url}`, {
-        ip: req.ip,
-        userAgent: req.get("User-Agent"),
-      });
+  // Catch-all handler for client-side routing (only in production)
+  if (isProduction) {
+    app.get("*", (req, res) => {
+      // Skip API routes
+      if (
+        req.path.startsWith("/api/") ||
+        req.path.startsWith("/health") ||
+        req.path.startsWith("/metrics")
+      ) {
+        logger.warn("NOT_FOUND", `Route not found: ${req.method} ${req.url}`, {
+          ip: req.ip,
+          userAgent: req.get("User-Agent"),
+        });
 
-      res.status(404).json({
-        error: "Not Found",
-        message: `Route ${req.method} ${req.url} not found`,
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
+        res.status(404).json({
+          error: "Not Found",
+          message: `Route ${req.method} ${req.url} not found`,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
 
-    // In development, let Vite handle client-side routing
-    // In production, serve the React app for all other routes
-    if (isProduction) {
+      // Serve the React app for all other routes
       res.sendFile("dist/spa/index.html", { root: process.cwd() });
-    } else {
-      // In development mode, don't handle client routes here - let Vite handle them
-      res.status(404).json({
-        error: "Not Found",
-        message: "Route not found in development mode",
-        timestamp: new Date().toISOString(),
-      });
-    }
-  });
+    });
+  }
 
   return app;
 }
